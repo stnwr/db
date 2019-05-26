@@ -1,7 +1,9 @@
+import path from 'path'
 import assert from 'assert'
 import Knex from 'knex'
-import db from '../db.json'
-import { createDB, createModels } from '../dbutils'
+import app from '../../ui/src/data.json'
+import { createDB, createModels1 } from '..'
+const relativeTo = path.join(__dirname, '../../project')
 
 const knex = Knex({
   client: 'mysql2',
@@ -13,16 +15,17 @@ const knex = Knex({
   }
 })
 
-async function testCreateDB () {
-  createDB(db, knex)
-}
+// async function testCreateDB () {
+//   createDB(app, knex, { relativeTo })
+// }
 
 async function testCreateModels () {
-  const models = await createModels(db, knex)
+  const models = await createModels1(app, knex, { relativeTo })
   console.log(models)
-  createMovies(models)
+  createSimple(models)
   createOrders(models)
   createPersonPetsData(models)
+  createStudents(models)
 }
 
 async function assertInsert (data, Model) {
@@ -35,16 +38,40 @@ async function assertInsert (data, Model) {
   return model
 }
 
+async function createSimple (models) {
+  const ex1 = await models.Simple
+    .query()
+    .insert({
+      name: 'foo',
+      description: 'bar',
+      content: Math.random().toString(36).slice(2),
+      // timestamp: '2019-04-08 22:00:57',
+      age: 45,
+      flag: true,
+      price: 4.95,
+      agreeTerms: true,
+      email: 'a@b.com',
+      purchasedAt: new Date().toISOString()
+    })
+
+  console.log(ex1)
+}
+
 async function createOrders (models) {
   const customer = await assertInsert({
     title: 'Mr',
-    first_name: 'David',
-    last_name: 'Stone',
-    ni: Math.random().toString(36).slice(2)
+    firstName: 'Jon',
+    lastName: 'Doe',
+    ni: Math.random().toString(36).slice(4, 12),
+    address: {
+      city: 'New York',
+      street: '5th Avenue',
+      zipCode: 'NY123'
+    }
   }, models.Customer)
 
   const basket = await assertInsert({
-    customer_id: customer.id
+    customerId: customer.id
   }, models.Basket)
 
   const bread = await assertInsert({
@@ -62,16 +89,16 @@ async function createOrders (models) {
   }, models.Product)
 
   const line1 = await assertInsert({
-    basket_id: basket.id,
-    product_id: milk.id,
+    basketId: basket.id,
+    productId: milk.id,
     quantity: 2
-  }, models.Basketline)
+  }, models.BasketLine)
 
   const line2 = await assertInsert({
-    basket_id: basket.id,
-    product_id: bread.id,
+    basketId: basket.id,
+    productId: bread.id,
     quantity: 1
-  }, models.Basketline)
+  }, models.BasketLine)
 
   const gotCustomer = await models.Customer
     .query()
@@ -84,7 +111,7 @@ async function createOrders (models) {
     // .eager('lines')
     .findById(basket.id)
 
-  const gotBasketLine = await models.Basketline
+  const gotBasketLine = await models.BasketLine
     .query()
     .eager('product')
     // .eager('lines')
@@ -93,83 +120,94 @@ async function createOrders (models) {
   console.log(line1, line2, gotCustomer, gotBasket, gotBasketLine)
 }
 
-async function createMovies (models) {
-  const critic1 = await assertInsert({
-    title: 'Mr',
-    first_name: 'David',
-    last_name: 'Stone'
-  }, models.Critic)
+async function createStudents (models) {
+  const studentType1 = await assertInsert({
+    name: 'grad'
+  }, models.StudentType)
 
-  const critic2 = await assertInsert({
-    title: 'Mr',
-    first_name: 'Barry',
-    last_name: 'Norman'
-  }, models.Critic)
+  const studentType2 = await assertInsert({
+    name: 'postgrad'
+  }, models.StudentType)
 
-  const movie1 = await assertInsert({
-    name: 'Toy Story',
-    synopsis: 'Toy adventure',
-    year: 1994
-  }, models.Movie)
+  const student1 = await assertInsert({
+    name: 'Stuart Dent',
+    description: 'Notes',
+    age: 18,
+    typeId: studentType1.id
+  }, models.Student)
 
-  const movie2 = await assertInsert({
-    name: 'Back to the future',
-    synopsis: 'Time travel adventure',
-    year: 1985
-  }, models.Movie)
+  const student2 = await assertInsert({
+    name: 'Sally Dent',
+    description: 'Notes',
+    age: 41,
+    typeId: studentType2.id
+  }, models.Student)
 
-  const review1 = await assertInsert({
-    critic_id: critic1.id,
-    movie_id: movie1.id,
-    body: 'Excellent!!',
-    rating: 5
-  }, models.Review)
+  const course1 = await assertInsert({
+    name: 'Maths',
+    description: 'Notes',
+    content: 'Calculus'
+  }, models.Course)
 
-  const review2 = await assertInsert({
-    critic_id: critic1.id,
-    movie_id: movie2.id,
-    body: 'Great fun!',
-    rating: 4
-  }, models.Review)
+  const course2 = await assertInsert({
+    name: 'Science',
+    description: 'Notes',
+    content: 'Chemistry'
+  }, models.Course)
 
-  const review3 = await assertInsert({
-    critic_id: critic2.id,
-    movie_id: movie1.id,
-    body: 'Fab!',
-    rating: 5
-  }, models.Review)
+  const course3 = await assertInsert({
+    name: 'English',
+    description: 'Notes',
+    content: 'Literature'
+  }, models.Course)
 
-  const gotCritic1 = await models.Critic
-    .query()
-    .eager('reviews')
-    .findById(critic1.id)
+  const enrollment1 = await assertInsert({
+    studentId: student1.id,
+    courseId: course1.id,
+    start: '2000-01-01',
+    end: '2001-01-01'
+  }, models.Enrollment)
 
-  const gotCritic2 = await models.Critic
-    .query()
-    .eager('reviews')
-    .findById(critic2.id)
+  const enrollment2 = await assertInsert({
+    studentId: student1.id,
+    courseId: course2.id,
+    start: '2000-01-01',
+    end: '2001-01-01'
+  }, models.Enrollment)
 
-  const gotMovie1 = await models.Movie
-    .query()
-    .eager('reviews')
-    .findById(movie1.id)
+  const enrollment3 = await assertInsert({
+    studentId: student2.id,
+    courseId: course1.id,
+    start: '2000-01-01',
+    end: '2001-01-01'
+  }, models.Enrollment)
 
-  const gotMovie2 = await models.Movie
-    .query()
-    .eager('reviews')
-    .findById(movie2.id)
+  const enrollment4 = await assertInsert({
+    studentId: student2.id,
+    courseId: course2.id,
+    start: '2000-01-01',
+    end: '2001-01-01'
+  }, models.Enrollment)
 
-  console.log(critic1, critic2, movie1, movie2, review1, review2, review3, gotCritic1, gotCritic2, gotMovie1, gotMovie2)
+  const enrollment5 = await assertInsert({
+    studentId: student2.id,
+    courseId: course3.id,
+    start: '2000-01-01',
+    end: '2001-01-01'
+  }, models.Enrollment)
+
+  console.log(student1, student2, course1, course2, course3, enrollment1, enrollment2, enrollment3, enrollment4, enrollment5)
 }
 
 async function createPersonPetsData (models) {
-  const dave = await models.Person
+  const jon = await models.Person
     .query()
     .insert({
-      first_name: 'David',
-      last_name: 'Stone',
-      ni: Math.random().toString(36).slice(2),
-      latlng: {
+      firstName: 'Jon',
+      lastName: 'Doe',
+      age: 21,
+      ni: Math.random().toString(36).slice(4, 12),
+      latLong: {
         latitude: 45,
         longitude: 45
       }
@@ -179,16 +217,16 @@ async function createPersonPetsData (models) {
     .query()
     .insert({
       name: 'Sooty',
-      owner_id: dave.id,
+      ownerId: jon.id,
       dob: '1996-01-01',
       description: 'Black and White like Jess the cat'
     })
 
   console.log(sooty instanceof models.Pet) // --> true
-  console.log(sooty.name) // --> 'Jennifer'
+  console.log(sooty.name) // --> 'Sooty'
 
-  console.log(dave instanceof models.Person) // --> true
-  console.log(dave.first_name) // --> 'David'
+  console.log(jon instanceof models.Person) // --> true
+  console.log(jon.firstName) // --> 'Jon'
 
   const pets = await models.Pet
     .query()
@@ -202,10 +240,11 @@ async function createPersonPetsData (models) {
   const graph = await models.Person
     .query()
     .insertGraph({
-      first_name: 'David',
-      last_name: 'Stone',
-      ni: Math.random().toString(36).slice(2),
-      latlng: {
+      firstName: 'Jon',
+      lastName: 'Doe',
+      age: 20,
+      ni: Math.random().toString(36).slice(4, 12),
+      latLong: {
         latitude: 45,
         longitude: 45
       },
@@ -216,17 +255,16 @@ async function createPersonPetsData (models) {
       }]
     })
 
-  const gotDave = await models.Person
+  const gotJon = await models.Person
     .query()
-    .findById(dave.id)
+    .findById(jon.id)
     .eager('pets')
 
-  // const dave = people[1]
-  const sooty2 = await gotDave
+  const sooty2 = await gotJon
     .$relatedQuery('pets')
     .insert({
       name: 'Sooty2',
-      owner_id: gotDave.id, // todo
+      ownerId: gotJon.id, // todo
       dob: '1997-01-01',
       description: 'Black and White like Jess the cat2'
     })

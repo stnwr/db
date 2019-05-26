@@ -1,8 +1,9 @@
 import hapi from 'hapi'
 import Knex from 'knex'
+import inert from 'inert'
 import { knexSnakeCaseMappers } from 'objection'
 import db from '../db.json'
-import { createModels } from '../dbutils'
+import { createModels } from '..'
 import { createResourceRouteOptions } from '../apiutils'
 import { toTitleCase } from '../helpers'
 
@@ -20,7 +21,14 @@ const knex = Knex({
 
 async function createServer () {
   // Create the hapi server
-  const server = hapi.server({ port: 3004 })
+  const server = hapi.server({
+    port: 3004,
+    routes: {
+      cors: true
+    }
+  })
+
+  await server.register(inert)
 
   server.ext('onPreResponse', (request, h) => {
     const response = request.response
@@ -46,6 +54,22 @@ async function createServer () {
     const Model = models[toTitleCase(name)]
     const routes = createResourceRouteOptions({ name, Model })
     server.route(routes)
+  })
+
+  server.route({
+    method: 'get',
+    path: '/db',
+    handler: {
+      file: 'db.json'
+    }
+  })
+
+  server.route({
+    method: 'get',
+    path: '/db',
+    handler: {
+      file: 'db.json'
+    }
   })
 
   server.start()
