@@ -89,8 +89,8 @@ export function columnRelations (app, table, columnName) {
       // $beforeInsert () {
       //   const date = new Date().toISOString()
 
-      //   this.updated_at = date
-      //   this.created_at = date
+      //   this.updatedAt = date
+      //   this.createdAt = date
       // }
 
       // $formatJson (json) {
@@ -111,8 +111,8 @@ export function columnRelations (app, table, columnName) {
       // }
 
       // $parseJson (json, opt) {
-      //   // delete json.created_at
-      //   // delete json.updated_at
+      //   // delete json.createdAt
+      //   // delete json.updatedAt
       //   json = super.$parseJson(json, opt)
 
       //   Object.keys(schema.properties).forEach(key => {

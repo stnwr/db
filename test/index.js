@@ -1,8 +1,8 @@
 import path from 'path'
 import assert from 'assert'
 import Knex from 'knex'
-import app from '../../ui/src/data.json'
-import { createDB, createModels1 } from '..'
+import app from '../../project/app.json'
+import { createDB, createModels } from '..'
 const relativeTo = path.join(__dirname, '../../project')
 
 const knex = Knex({
@@ -20,12 +20,12 @@ const knex = Knex({
 // }
 
 async function testCreateModels () {
-  const models = await createModels1(app, knex, { relativeTo })
+  const models = await createModels(app, knex, { relativeTo })
   console.log(models)
   createSimple(models)
   createOrders(models)
   createPersonPetsData(models)
-  createStudents(models)
+  // createStudents(models)
 }
 
 async function assertInsert (data, Model) {
@@ -62,7 +62,7 @@ async function createOrders (models) {
     title: 'Mr',
     firstName: 'Jon',
     lastName: 'Doe',
-    ni: Math.random().toString(36).slice(4, 12),
+    ni: Math.random().toString(36).substring(2, 10),
     address: {
       city: 'New York',
       street: '5th Avenue',
@@ -82,7 +82,7 @@ async function createOrders (models) {
   }, models.Product)
 
   const milk = await assertInsert({
-    code: 'P001',
+    code: 'P002',
     name: 'Milk',
     description: 'Milky',
     price: 1.50
@@ -206,7 +206,7 @@ async function createPersonPetsData (models) {
       firstName: 'Jon',
       lastName: 'Doe',
       age: 21,
-      ni: Math.random().toString(36).slice(4, 12),
+      ni: Math.random().toString(36).substring(2, 10),
       latLong: {
         latitude: 45,
         longitude: 45
@@ -240,10 +240,11 @@ async function createPersonPetsData (models) {
   const graph = await models.Person
     .query()
     .insertGraph({
-      firstName: 'Jon',
+      title: 'Mrs',
+      firstName: 'Jane',
       lastName: 'Doe',
       age: 20,
-      ni: Math.random().toString(36).slice(4, 12),
+      ni: Math.random().toString(36).substring(2, 10),
       latLong: {
         latitude: 45,
         longitude: 45

@@ -11,6 +11,7 @@
   "dependencies": {
     "@stoneware/common": "file:../common",
     "dayjs": "^1.8.14",
+    "expr-eval": "^1.2.2",
     "json-schema-ref-parser": "^6.1.0",
     "objection": "^1.6.3"
   },

@@ -52,11 +52,11 @@ async function createPerson () {
   assert.strictEqual(typeof jane.dob, 'string')
   assert.strictEqual(isYYYYMMDD(jane.dob), true)
 
-  assert.strictEqual(typeof jane.updated_at, 'string')
-  assert.strictEqual(isIsoDate(jane.updated_at), true)
+  assert.strictEqual(typeof jane.updatedAt, 'string')
+  assert.strictEqual(isIsoDate(jane.updatedAt), true)
 
-  assert.strictEqual(typeof jane.created_at, 'string')
-  assert.strictEqual(isIsoDate(jane.created_at), true)
+  assert.strictEqual(typeof jane.createdAt, 'string')
+  assert.strictEqual(isIsoDate(jane.createdAt), true)
 
   const json = jane.toJSON()
 
