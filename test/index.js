@@ -25,7 +25,7 @@ async function testCreateModels () {
   createSimple(models)
   createOrders(models)
   createPersonPetsData(models)
-  // createStudents(models)
+  createStudents(models)
 }
 
 async function assertInsert (data, Model) {

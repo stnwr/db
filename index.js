@@ -1,7 +1,6 @@
 import path from 'path'
 import { compose, Model } from 'objection'
 import parser from 'json-schema-ref-parser'
-import relationsHelper from '@stoneware/common/helpers/relations'
 import { getSchemaFromTable } from '@stoneware/common/helpers/schema'
 
 import ModelMixinFactory from './ModelMixin.js'
@@ -63,7 +62,7 @@ function getKnexTypeArgsFromField (field) {
       return [type]
     case 'number':
       return ['float']
-    case 'id':
+    case 'fk':
       return ['integer']
     default: {
       throw new Error(`Unsupported type "${type}"`)
@@ -83,7 +82,7 @@ function createColumnFromField (db, def, table, field, knex) {
       : field.default)
   }
 
-  if (type === 'id') {
+  if (type === 'fk') {
     chain = chain.unsigned()
   } else if (type === 'number') {
 
@@ -97,7 +96,7 @@ function createColumnFromField (db, def, table, field, knex) {
     chain = chain.comment(field.description)
   }
 
-  console.log(chain)
+  return chain
 }
 
 function createTableFactory ({ app, def }) {
@@ -111,7 +110,7 @@ function createTableFactory ({ app, def }) {
           // Include default id column
           table.increments('id').unsigned().primary()
 
-          const fieldFilter = field => field.name !== 'id' &&
+          const fieldFilter = field => field.type !== 'id' &&
             field.type !== 'relation' && field.virtual !== true
 
           // Add columns from properties
@@ -137,12 +136,18 @@ function createTableFactory ({ app, def }) {
   }
 }
 
-async function addRelation (knex, def, relation) {
+async function addForeignKey (knex, def, field) {
   return new Promise((resolve, reject) => {
     knex.schema
       .table(def.name, function (table) {
-        const ref = `${relation.table}.${relation.to}`
-        table.foreign(relation.from).references(ref)
+        const ref = `${field.table}.${field.field}`
+        let chain = table.foreign(field.name).references(ref)
+
+        if (field.cascadeOnDelete) {
+          chain = chain.onDelete('CASCADE')
+        }
+
+        return chain
       })
       .then(result => resolve(result))
       .catch(err => reject(err))
@@ -211,15 +216,12 @@ export async function createDB (app, knex) {
     }
     console.log('results', results)
 
-    const fkTypes = relationsHelper.Types1
+    for await (const table of tables) {
+      const fks = table.fields
+        .filter(f => f.type === 'fk')
 
-    for await (const def of tables) {
-      const relations = def.fields
-        .filter(f => f.type === 'relation')
-        .filter(f => fkTypes[f.kind].foreignKey(f))
-
-      for (const relation of relations) {
-        await addRelation(knex, def, relation)
+      for (const field of fks) {
+        await addForeignKey(knex, table, field)
       }
     }
   } catch (err) {
