@@ -16,9 +16,9 @@ export default ({ table, schema, relationMappings, name }) => {
         return true
       }
 
-      static get idColumn () {
-        return 'id'
-      }
+      // static get idColumn () {
+      //   return 'id'
+      // }
 
       static get jsonSchema () {
         return schema

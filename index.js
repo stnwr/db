@@ -2,10 +2,191 @@ import path from 'path'
 import { compose, Model } from 'objection'
 import parser from 'json-schema-ref-parser'
 import { getSchemaFromTable } from '@stoneware/common/helpers/schema'
-
+import { allowDefault, allowIndex, allowNullable, allowPrimary, allowUnique } from '@stoneware/common/helpers/types'
 import ModelMixinFactory from './ModelMixin.js'
 
-function createModelFromTable (app, table, schemas, resolveModel, BaseModel) {
+function preprocessField (app, field) {
+  if (field.type !== 'fk') {
+    return Object.assign({}, field)
+  } else {
+    // Foreign key fields lend properties from their target field
+    const foreignTable = app.tables.find(t => t.name === field.table)
+    const foreignField = foreignTable.fields.find(f => f.name === field.to)
+    const { name, title, description, index, unique, primary } = field
+    const { type, minimum, maximum, minLength, maxLength, unsigned, auto } = foreignField
+
+    return Object.assign({},
+      { type, minimum, maximum, minLength, maxLength, unsigned: auto || unsigned },
+      { name, title, description, index, unique, primary })
+  }
+}
+
+function createColumn (app, def, table, field, knex) {
+  field = preprocessField(app, field)
+
+  const { type, name, title, description } = field
+  let { default: defaultValue } = field
+  let col
+
+  if (type === 'string') {
+    const { enum: enumerable } = field
+
+    if (Array.isArray(enumerable)) {
+      col = table.enum(name, enumerable)
+    } else {
+      col = field.maxLength > 255
+        ? table.text(name, field.maxLength)
+        : table.string(name, field.maxLength)
+    }
+  } else if (type === 'number') {
+    col = table.float(name)
+  } else if (type === 'integer') {
+    if (field.auto) {
+      col = table.increments(name)
+    } else {
+      col = table.integer(name)
+
+      if (field.unsigned || field.minimum >= 0) {
+        col = col.unsigned()
+      }
+    }
+  } else if (type === 'date' || type === 'datetime') {
+    col = table[type](name)
+
+    if (defaultValue === 'now') {
+      defaultValue = knex.fn.now()
+    }
+  } else if (type === 'boolean' || type === 'time' || type === 'json') {
+    col = table[type](name)
+  } else {
+    throw new Error(`Unsupported type "${type}"`)
+  }
+
+  // Column comment
+  if (description || title) {
+    col = col.comment(description || title)
+  }
+
+  // Primary key
+  if (field.primary && allowPrimary.includes(type)) {
+    const primaryFieldsCount = def.fields.filter(col => col.primary).length
+    const hasSinglePrimaryField = primaryFieldsCount === 1
+
+    if (hasSinglePrimaryField) {
+      col = col.primary()
+    }
+  }
+
+  // Default value
+  if (defaultValue && allowDefault.includes(type)) {
+    col = col.defaultTo(defaultValue)
+  }
+
+  // Nullable
+  if (field.nullable && allowNullable.includes(type)) {
+    col = col.nullable()
+  } else {
+    col = col.notNullable()
+  }
+
+  // Column index
+  if (field.index && allowIndex.includes(type)) {
+    col = col.index()
+  }
+
+  // Column unique
+  if (field.unique && allowUnique.includes(type)) {
+    col = col.unique()
+  }
+
+  return col
+}
+
+function createTableFactory ({ app, def }) {
+  return function (knex) {
+    return new Promise((resolve, reject) => {
+      let tbl = null
+      knex.schema
+        .createTable(def.name, function (table) {
+          tbl = table
+
+          const filter = f => f.virtual !== true && f.type !== 'relation'
+
+          // Add fields
+          def.fields
+            .filter(filter)
+            .forEach(field => createColumn(app, def, table, field, knex))
+
+          // Check for composite primary keys
+          const primaryField = def.fields
+            .filter(filter)
+            .filter(col => col.primary)
+
+          if (primaryField.length > 1) {
+            table.primary(primaryField.map(f => f.name))
+          }
+
+          // Include default timestamp columns
+          if (!def.excludeDefaultFields) {
+            const now = knex.fn.now()
+
+            table.timestamp('updatedAt').notNullable()
+              .defaultTo(now).comment('Updated timestamp')
+
+            table.timestamp('createdAt').notNullable()
+              .defaultTo(now).comment('Created timestamp')
+          }
+        })
+        .then(() => resolve(tbl))
+        .catch(err => reject(err))
+    })
+  }
+}
+
+async function addForeignKeys (knex, def) {
+  return new Promise((resolve, reject) => {
+    knex.schema
+      .table(def.name, table => {
+        function addForeignKey (from, tableName, to, cascadeOnDelete) {
+          let chain = table.foreign(from)
+            .references(to).inTable(tableName)
+
+          if (cascadeOnDelete) {
+            chain = chain.onDelete('CASCADE')
+          }
+
+          return chain
+        }
+
+        for (const field of def.fields.filter(f => f.type === 'fk')) {
+          addForeignKey(field.name, field.table, field.to, field.cascadeOnDelete)
+        }
+
+        if (Array.isArray(def.foreignKeys)) {
+          for (const key of def.foreignKeys) {
+            addForeignKey(key.from, key.table, key.to, key.cascadeOnDelete)
+          }
+        }
+      })
+      .then(result => resolve(result))
+      .catch(err => reject(err))
+  })
+}
+
+async function addIndexes (knex, def) {
+  return new Promise((resolve, reject) => {
+    knex.schema
+      .table(def.name, table => {
+        return def.indexes.map(index => {
+          return table[index.unique ? 'unique' : 'index'](index.fields)
+        })
+      })
+      .then(result => resolve(result))
+      .catch(err => reject(err))
+  })
+}
+
+function createModel (app, table, schemas, resolveModel, BaseModel) {
   const name = table.name
   const modelName = table.modelName
   const relationMappings = {}
@@ -37,120 +218,7 @@ function createModelFromTable (app, table, schemas, resolveModel, BaseModel) {
   )
 
   return ({
-    [modelName]: class extends mixins(BaseModel) {}
-  })
-}
-
-function getKnexTypeArgsFromField (field) {
-  const { type, enum: enumerable } = field
-
-  switch (type) {
-    case 'string':
-      if (Array.isArray(enumerable)) {
-        return ['enum', enumerable]
-      } else {
-        return field.maxLength > 255
-          ? ['text', field.maxLength]
-          : ['string', field.maxLength]
-      }
-    case 'date':
-    case 'time':
-    case 'datetime':
-    case 'integer':
-    case 'boolean':
-    case 'json':
-      return [type]
-    case 'number':
-      return ['float']
-    case 'fk':
-      return ['integer']
-    default: {
-      throw new Error(`Unsupported type "${type}"`)
-    }
-  }
-}
-
-function createColumnFromField (db, def, table, field, knex) {
-  const { type } = field
-  const [dbType, ...rest] = getKnexTypeArgsFromField(field)
-
-  let chain = table[dbType](field.name, ...rest)[field.nullable ? 'nullable' : 'notNullable']()
-
-  if (field.default) {
-    chain = chain.defaultTo(field.default === 'now'
-      ? knex.fn.now()
-      : field.default)
-  }
-
-  if (type === 'fk') {
-    chain = chain.unsigned()
-  } else if (type === 'number') {
-
-  } else if (type === 'integer') {
-    if (field.minimum >= 0) {
-      chain = chain.unsigned()
-    }
-  }
-
-  if (field.description) {
-    chain = chain.comment(field.description)
-  }
-
-  return chain
-}
-
-function createTableFactory ({ app, def }) {
-  return function (knex) {
-    return new Promise((resolve, reject) => {
-      let tbl = null
-      knex.schema
-        .createTable(def.name, function (table) {
-          tbl = table
-
-          // Include default id column
-          table.increments('id').unsigned().primary()
-
-          const fieldFilter = field => field.type !== 'id' &&
-            field.type !== 'relation' && field.virtual !== true
-
-          // Add columns from properties
-          def.fields
-            .filter(fieldFilter)
-            .forEach(field => createColumnFromField(app, def, table, field, knex))
-
-          // Include default timestamp columns
-          const now = knex.fn.now()
-          table.timestamp('updatedAt').notNullable().defaultTo(now)
-          table.timestamp('createdAt').notNullable().defaultTo(now)
-
-          // Indexes
-          if (Array.isArray(def.indexes)) {
-            def.indexes.forEach(index => {
-              table[index.unique ? 'unique' : 'index'](index.columns)
-            })
-          }
-        })
-        .then(() => resolve(tbl))
-        .catch(err => reject(err))
-    })
-  }
-}
-
-async function addForeignKey (knex, def, field) {
-  return new Promise((resolve, reject) => {
-    knex.schema
-      .table(def.name, function (table) {
-        const ref = `${field.table}.${field.field}`
-        let chain = table.foreign(field.name).references(ref)
-
-        if (field.cascadeOnDelete) {
-          chain = chain.onDelete('CASCADE')
-        }
-
-        return chain
-      })
-      .then(result => resolve(result))
-      .catch(err => reject(err))
+    [modelName]: class extends mixins(BaseModel) { }
   })
 }
 
@@ -162,13 +230,15 @@ export async function createModels (app, knex, { relativeTo, schemaPath = 'schem
   // Resolve any json field schema refs
   for await (const table of tables) {
     const jsonFields = table.fields.filter(f => f.type === 'json')
-    const files = jsonFields.map(f => path.join(relativeTo, schemaPath, f.ref))
+    const jsonFieldsWithRef = jsonFields.filter(f => f.ref)
+    const files = jsonFieldsWithRef
+      .map(f => path.join(relativeTo, schemaPath, f.ref))
     const opts = { dereference: { circular: 'ignore' } }
     const promises = files.map(file => parser.dereference(file, opts))
     const schemas = (await Promise.all(promises))
-      .map((schema, i) => ({ schema, field: jsonFields[i] }))
+      .map((schema, i) => ({ schema, field: jsonFieldsWithRef[i] }))
 
-    let BaseModel = class BaseModel extends Model {}
+    let BaseModel = class BaseModel extends Model { }
 
     // todo: throw error if file not found
     // or only fail if the table has virtuals?
@@ -189,7 +259,7 @@ export async function createModels (app, knex, { relativeTo, schemaPath = 'schem
     // Give the knex object to objection.
     BaseModel.knex(knex)
 
-    const model = createModelFromTable(app, table, schemas, resolveModel, BaseModel)
+    const model = createModel(app, table, schemas, resolveModel, BaseModel)
 
     Object.assign(models, model)
   }
@@ -214,14 +284,19 @@ export async function createDB (app, knex) {
       const result = await factory(knex)
       results[def.name] = result
     }
+
     console.log('results', results)
 
+    // Foreign keys
     for await (const table of tables) {
-      const fks = table.fields
-        .filter(f => f.type === 'fk')
+      if (table.fields.filter(f => f.type === 'fk') ||
+        (Array.isArray(table.foreignKeys) && table.foreignKeys.length)) {
+        await addForeignKeys(knex, table)
+      }
 
-      for (const field of fks) {
-        await addForeignKey(knex, table, field)
+      // Indexes
+      if (Array.isArray(table.indexes) && table.indexes.length) {
+        await addIndexes(knex, table)
       }
     }
   } catch (err) {
