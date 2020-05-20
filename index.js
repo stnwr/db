@@ -1,9 +1,11 @@
 import path from 'path'
-import { compose, Model } from 'objection'
+import objection from 'objection'
 import parser from 'json-schema-ref-parser'
-import { getSchemaFromTable } from '@stoneware/common/helpers/schema'
-import { allowDefault, allowIndex, allowNullable, allowPrimary, allowUnique } from '@stoneware/common/helpers/types'
+import { getSchemaFromTable } from '@stoneware/common/helpers/schema.js'
+import { allowDefault, allowIndex, allowNullable, allowPrimary, allowUnique } from '@stoneware/common/helpers/types.js'
 import ModelMixinFactory from './ModelMixin.js'
+
+const { compose, Model } = objection
 
 function preprocessField (app, field) {
   if (field.type !== 'fk') {
