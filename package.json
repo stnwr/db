@@ -1,7 +1,8 @@
 {
   "name": "@stoneware/db",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "DB utilities for stoneware",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,16 +10,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@stoneware/common": "file:../common",
+    "@stoneware/common": "^0.0.2",
     "dayjs": "^1.8.14",
-    "expr-eval": "^1.2.2",
     "json-schema-ref-parser": "^6.1.0",
     "objection": "^1.6.3"
   },
   "devDependencies": {
-    "esm": "^3.2.16",
     "knex": "^0.16.3",
-    "mysql2": "^1.6.5",
-    "objection-find": "^1.6.5"
+    "mysql2": "^1.6.5"
   }
 }

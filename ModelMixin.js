@@ -1,5 +1,4 @@
 import dayjs from 'dayjs'
-// import expreval from 'expr-eval'
 
 export default ({ table, schema, relationMappings, name }) => {
   const virtualAttributes = table.fields
