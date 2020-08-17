@@ -1,6 +1,6 @@
-import dayjs from 'dayjs'
+const dayjs = require('dayjs')
 
-export default ({ table, schema, relationMappings, name }) => {
+module.exports = ({ table, schema, relationMappings, name }) => {
   const virtualAttributes = table.fields
     .filter(f => f.virtual)
     .map(f => f.name)

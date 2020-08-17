@@ -1,9 +1,9 @@
-import path from 'path'
-import objection from 'objection'
-import parser from 'json-schema-ref-parser'
-import { getSchemaFromTable } from '@stoneware/common/helpers/schema.js'
-import { allowDefault, allowIndex, allowNullable, allowPrimary, allowUnique } from '@stoneware/common/helpers/types.js'
-import ModelMixinFactory from './ModelMixin.js'
+const path = require('path')
+const objection = require('objection')
+const parser = require('json-schema-ref-parser')
+const { getSchemaFromTable } = require('@stoneware/common/helpers/schema.js')
+const { allowDefault, allowIndex, allowNullable, allowPrimary, allowUnique } = require('@stoneware/common/helpers/types.js')
+const ModelMixinFactory = require('./ModelMixin.js')
 
 const { compose, Model } = objection
 
@@ -224,7 +224,7 @@ function createModel (app, table, schemas, resolveModel, BaseModel) {
   })
 }
 
-export async function createModels (app, knex, { relativeTo, schemaPath = 'schema', modelsPath = 'models' } = {}) {
+async function createModels (app, knex, { relativeTo, schemaPath = 'schema', modelsPath = 'models' } = {}) {
   const tables = app.tables
 
   const models = {}
@@ -273,7 +273,7 @@ export async function createModels (app, knex, { relativeTo, schemaPath = 'schem
   return models
 }
 
-export async function createDB (app, knex) {
+async function createDB (app, knex) {
   try {
     const tables = app.tables
     console.log('tables', tables)
@@ -305,4 +305,9 @@ export async function createDB (app, knex) {
     console.error(err)
     throw err
   }
+}
+
+module.exports = {
+  createModels,
+  createDB
 }

@@ -1,3 +1,3 @@
-import { createModels, createDB } from '../index.js'
+const { createModels, createDB } = require('../index.js')
 
 console.log(createModels, createDB)
