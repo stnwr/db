@@ -15,7 +15,7 @@
     "objection": "^2.2.2"
   },
   "devDependencies": {
-    "knex": "^0.21.4",
+    "knex": "^2.4.0",
     "mysql2": "^2.1.0"
   }
 }
